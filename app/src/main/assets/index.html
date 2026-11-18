@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Editor Saku</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: satu layar penuh. Di HP satu panel per tab (Kode / Hasil / Konsol); di layar lebar kode di kiri, hasil dan konsol bertumpuk di kanan. */
+:root {
+  --bg: #e9edf1;
+  --panel: #ffffff;
+  --panel2: #f3f6f8;
+  --fg: #12181e;
+  --muted: #5b6772;
+  --line: #d2d9e0;
+  --accent: #0b7a6b;
+  --accent-fg: #ffffff;
+  --danger: #b3261e;
+  --warn: #8a5a00;
+  --ok: #1b7f4b;
+  --tk-kw: #8a3ffc;
+  --tk-str: #0a7a3d;
+  --tk-num: #b45309;
+  --tk-com: #7a8794;
+  --tk-tag: #0b6bcb;
+  --tk-attr: #a0306e;
+  --tk-fn: #0b6bcb;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-code: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c1014; --panel: #141a20; --panel2: #1a222a; --fg: #e5eaef; --muted: #93a0ac; --line: #26313b;
+    --accent: #3dd6b5; --accent-fg: #06201a; --danger: #ff7b72; --warn: #e3b341; --ok: #56d364;
+    --tk-kw: #c9a0ff; --tk-str: #7ee787; --tk-num: #ffa657; --tk-com: #6e7b88; --tk-tag: #79c0ff; --tk-attr: #ff9bce; --tk-fn: #79c0ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c1014; --panel: #141a20; --panel2: #1a222a; --fg: #e5eaef; --muted: #93a0ac; --line: #26313b;
+  --accent: #3dd6b5; --accent-fg: #06201a; --danger: #ff7b72; --warn: #e3b341; --ok: #56d364;
+  --tk-kw: #c9a0ff; --tk-str: #7ee787; --tk-num: #ffa657; --tk-com: #6e7b88; --tk-tag: #79c0ff; --tk-attr: #ff9bce; --tk-fn: #79c0ff;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 14px; overflow: hidden; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+#app { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+
+.bar { display: flex; align-items: center; gap: 8px; padding: 8px max(16px, env(safe-area-inset-left, 0px)) 8px max(16px, env(safe-area-inset-right, 0px)); background: var(--panel); border-bottom: 1px solid var(--line); }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: -0.01em; min-width: 0; white-space: nowrap; }
+.logo { width: 20px; height: 20px; border-radius: 5px; background: var(--accent); position: relative; flex: none; }
+.logo::before { content: "</>"; position: absolute; inset: 0; display: grid; place-items: center; font: 600 9px var(--font-code); color: var(--accent-fg); letter-spacing: -0.5px; }
+.spacer { flex: 1; }
+.auto { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.btn { border: 1px solid var(--line); background: var(--panel2); border-radius: 8px; padding: 7px 12px; font-weight: 500; line-height: 1; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: transparent; }
+.btn.danger { color: var(--danger); border-color: var(--danger); }
+
+.views { display: flex; gap: 4px; padding: 6px max(16px, env(safe-area-inset-left, 0px)) 6px max(16px, env(safe-area-inset-right, 0px)); background: var(--panel); border-bottom: 1px solid var(--line); }
+.views button { flex: 1; border: 0; background: transparent; padding: 8px 4px; border-radius: 8px; color: var(--muted); font-weight: 500; }
+.views button[aria-selected="true"] { background: var(--panel2); color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+.badge { display: inline-block; min-width: 18px; padding: 1px 5px; margin-left: 4px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 11px; }
+
+#main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; gap: 1px; background: var(--line); }
+section { background: var(--panel); min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+#main[data-view="code"] #pane-out, #main[data-view="code"] #pane-con,
+#main[data-view="out"] #pane-code, #main[data-view="out"] #pane-con,
+#main[data-view="con"] #pane-code, #main[data-view="con"] #pane-out { display: none; }
+.pane-h { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--line); text-transform: uppercase; letter-spacing: 0.06em; }
+
+.files { display: flex; align-items: stretch; gap: 2px; padding: 6px 12px 0; background: var(--panel2); border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.files::-webkit-scrollbar { display: none; }
+.file { border: 0; background: transparent; padding: 8px 12px; border-radius: 8px 8px 0 0; color: var(--muted); font: 500 12.5px var(--font-code); white-space: nowrap; }
+.file[aria-selected="true"] { background: var(--panel); color: var(--fg); box-shadow: inset 0 2px 0 var(--accent); }
+.file.add { color: var(--accent); font-weight: 600; }
+.file.del { color: var(--danger); font-family: var(--font-ui); font-weight: 500; }
+.status { margin-left: auto; align-self: center; padding: 0 8px; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.newfile { display: flex; gap: 8px; align-items: center; padding: 8px 12px; background: var(--panel2); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.newfile input { flex: 1; min-width: 140px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); font-family: var(--font-code); font-size: 13px; }
+.newfile .err { color: var(--danger); font-size: 12px; width: 100%; }
+
+.editor { position: relative; flex: 1; min-height: 0; background: var(--panel); font: 13px/1.65 var(--font-code); }
+.gut, .hl, .ta { position: absolute; top: 0; bottom: 0; margin: 0; padding: 12px 0; font: inherit; tab-size: 2; }
+.gut { left: 0; width: 44px; overflow: hidden; text-align: right; padding-right: 10px; color: var(--muted); background: var(--panel2); border-right: 1px solid var(--line); white-space: pre; user-select: none; }
+.hl, .ta { left: 44px; right: 0; padding-left: 12px; padding-right: 12px; white-space: pre; word-wrap: normal; border: 0; }
+.hl { overflow: hidden; pointer-events: none; color: var(--fg); }
+.ta { overflow: auto; background: transparent; color: transparent; -webkit-text-fill-color: transparent; caret-color: var(--fg); resize: none; outline: none; }
+.ta::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); -webkit-text-fill-color: transparent; }
+.k { color: var(--tk-kw); } .s { color: var(--tk-str); } .n { color: var(--tk-num); } .c { color: var(--tk-com); font-style: italic; }
+.t { color: var(--tk-tag); } .a { color: var(--tk-attr); } .f { color: var(--tk-fn); } .p { color: var(--tk-attr); }
+
+.keys { display: flex; gap: 6px; padding: 6px max(12px, env(safe-area-inset-left, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-right, 0px)); background: var(--panel); border-top: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.keys::-webkit-scrollbar { display: none; }
+.keys button { flex: none; min-width: 40px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); font: 500 14px var(--font-code); line-height: 1; }
+.keys button:active { background: var(--accent); color: var(--accent-fg); }
+#app:has(#main:not([data-view="code"])) .keys { display: none; }
+
+iframe { flex: 1; min-height: 0; width: 100%; border: 0; background: #fff; }
+#log { flex: 1; min-height: 0; overflow: auto; padding: 8px 0; font: 12.5px/1.55 var(--font-code); }
+.ln { padding: 3px 16px; border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent); white-space: pre-wrap; word-break: break-word; }
+.ln.warn { color: var(--warn); } .ln.error { color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.ln.in { color: var(--muted); } .ln.in::before { content: "› "; } .ln.result::before { content: "← "; color: var(--muted); }
+.ln.sys { color: var(--muted); font-style: italic; }
+.evalrow { display: flex; border-top: 1px solid var(--line); }
+.evalrow span { padding: 9px 0 9px 16px; color: var(--accent); font: 13px var(--font-code); }
+.evalrow input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 9px 16px 9px 8px; font: 13px var(--font-code); outline: none; }
+.linkbtn { margin-left: auto; border: 0; background: transparent; color: var(--accent); font-size: 12px; text-transform: none; letter-spacing: 0; }
+
+@media (min-width: 880px) {
+  .views { display: none; }
+  #main { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1.5fr) minmax(0, 1fr); }
+  #main > section { display: flex !important; }
+  #pane-code { grid-row: 1 / span 2; }
+  .keys { display: none !important; }
+}
+@media (prefers-reduced-motion: no-preference) { .btn, .views button, .file { transition: background .12s, border-color .12s; } }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header class="bar">
+    <div class="brand"><span class="logo" aria-hidden="true"></span>Editor Saku</div>
+    <div class="spacer"></div>
+    <label class="auto"><input id="auto" type="checkbox" checked> Auto</label>
+    <button id="run" class="btn primary" type="button">Jalankan</button>
+    <button id="reset" class="btn" type="button" title="Kembalikan proyek contoh">Reset</button>
+  </header>
+  <nav class="views" id="views" role="tablist" aria-label="Tampilan">
+    <button type="button" role="tab" data-view="code" aria-selected="true">Kode</button>
+    <button type="button" role="tab" data-view="out" aria-selected="false">Hasil</button>
+    <button type="button" role="tab" data-view="con" aria-selected="false">Konsol<span id="errBadge" class="badge" hidden>0</span></button>
+  </nav>
+  <main id="main" data-view="code">
+    <section id="pane-code">
+      <div class="files" id="files" role="tablist" aria-label="Berkas"></div>
+      <form id="newForm" class="newfile" hidden>
+        <input id="newName" type="text" placeholder="nama-berkas.js" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Nama berkas baru">
+        <button class="btn primary" type="submit">Tambah</button>
+        <button class="btn" type="button" id="newCancel">Batal</button>
+        <div class="err" id="newErr" hidden></div>
+      </form>
+      <div class="editor">
+        <div class="gut" id="gut" aria-hidden="true"></div>
+        <pre class="hl" id="hl" aria-hidden="true"></pre>
+        <textarea class="ta" id="ta" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" wrap="off" aria-label="Isi berkas"></textarea>
+      </div>
+    </section>
+    <section id="pane-out">
+      <div class="pane-h">Hasil</div>
+      <iframe id="frame" title="Hasil" sandbox="allow-scripts"></iframe>
+    </section>
+    <section id="pane-con">
+      <div class="pane-h">Konsol <button class="linkbtn" id="clearLog" type="button">Bersihkan</button></div>
+      <div id="log" aria-live="polite"></div>
+      <form class="evalrow" id="evalForm"><span>›</span><input id="evalIn" type="text" placeholder="Ketik JavaScript, lalu Enter" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Jalankan JavaScript di halaman hasil"></form>
+    </section>
+  </main>
+  <div class="keys" id="keys"></div>
+</div>
+
+<script>
+(function () {
+  var KEY = 'editor-saku-v1';
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------- proyek contoh: Timer Fokus ----------
+  function starter() {
+    return {
+      order: ['index.html', 'style.css', 'script.js'],
+      active: 'index.html',
+      files: {
+        'index.html': [
+          '<!doctype html>',
+          '<html lang="id">',
+          '<head>',
+          '  <meta charset="utf-8">',
+          '  <meta name="viewport" content="width=device-width, initial-scale=1">',
+          '  <title>Timer Fokus</title>',
+          '  <link rel="stylesheet" href="style.css">',
+          '</head>',
+          '<body>',
+          '  <main>',
+          '    <p class="label">Sesi fokus</p>',
+          '    <h1 id="waktu">25:00</h1>',
+          '    <div class="aksi">',
+          '      <button id="mulai">Mulai</button>',
+          '      <button id="reset" class="sekunder">Reset</button>',
+          '    </div>',
+          '    <p id="status">Siap. Ketuk Mulai.</p>',
+          '  </main>',
+          '  <script src="script.js"><\/script>',
+          '</body>',
+          '</html>'
+        ].join('\n'),
+        'style.css': [
+          '/* Ubah warna atau ukuran, hasilnya langsung terlihat */',
+          ':root { --aksen: #0b7a6b; }',
+          '* { box-sizing: border-box; }',
+          'body {',
+          '  margin: 0;',
+          '  min-height: 100vh;',
+          '  display: grid;',
+          '  place-items: center;',
+          '  font-family: system-ui, sans-serif;',
+          '  background: #f3f5f4;',
+          '  color: #14201d;',
+          '}',
+          'main { text-align: center; padding: 24px; }',
+          '.label { margin: 0; letter-spacing: .12em; text-transform: uppercase; font-size: 12px; color: #5b6b66; }',
+          'h1 { margin: 8px 0 20px; font-size: 76px; font-variant-numeric: tabular-nums; }',
+          '.aksi { display: flex; gap: 10px; justify-content: center; }',
+          'button { padding: 12px 22px; border-radius: 10px; border: 0; font-size: 16px; background: var(--aksen); color: #fff; }',
+          'button.sekunder { background: #dfe6e3; color: #14201d; }',
+          '#status { margin-top: 18px; color: #5b6b66; }'
+        ].join('\n'),
+        'script.js': [
+          'const DURASI = 25 * 60; // detik',
+          'const waktu = document.querySelector("#waktu");',
+          'const status = document.querySelector("#status");',
+          'const mulai = document.querySelector("#mulai");',
+          'let sisa = DURASI;',
+          'let timer = null;',
+          '',
+          'function tampil() {',
+          '  const m = String(Math.floor(sisa / 60)).padStart(2, "0");',
+          '  const d = String(sisa % 60).padStart(2, "0");',
+          '  waktu.textContent = m + ":" + d;',
+          '}',
+          '',
+          'mulai.addEventListener("click", () => {',
+          '  if (timer) {',
+          '    clearInterval(timer); timer = null;',
+          '    mulai.textContent = "Lanjut"; status.textContent = "Dijeda.";',
+          '    console.log("dijeda di", sisa, "detik");',
+          '    return;',
+          '  }',
+          '  mulai.textContent = "Jeda"; status.textContent = "Fokus...";',
+          '  timer = setInterval(() => {',
+          '    sisa--; tampil();',
+          '    if (sisa <= 0) { clearInterval(timer); timer = null; status.textContent = "Selesai!"; console.log("sesi selesai"); }',
+          '  }, 1000);',
+          '});',
+          '',
+          'document.querySelector("#reset").addEventListener("click", () => {',
+          '  clearInterval(timer); timer = null; sisa = DURASI; tampil();',
+          '  mulai.textContent = "Mulai"; status.textContent = "Siap. Ketuk Mulai.";',
+          '});',
+          '',
+          'console.log("Timer siap,", DURASI / 60, "menit");',
+          'tampil();'
+        ].join('\n')
+      }
+    };
+  }
+
+  // ---------- penyimpanan (hanya kenyamanan, boleh gagal) ----------
+  var S;
+  function load() {
+    try { var raw = localStorage.getItem(KEY); if (raw) { var o = JSON.parse(raw); if (o && o.files && o.order && o.order.length) return o; } } catch (e) {}
+    return starter();
+  }
+  var saveT, statusEl;
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(S)); setStatus('Tersimpan di perangkat ini'); }
+    catch (e) { setStatus('Tidak tersimpan (penyimpanan dimatikan)'); }
+  }
+  function setStatus(t) { if (statusEl) statusEl.textContent = t; }
+  S = load();
+  if (S.order.indexOf(S.active) < 0) S.active = S.order[0];
+
+  // ---------- pewarna sintaks ----------
+  function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  var RULES = {
+    js: [
+      [/\/\/[^\n]*|\/\*[\s\S]*?\*\//, 'c'],
+      [/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\[\s\S])*`/, 's'],
+      [/\b(?:const|let|var|function|return|if|else|for|while|do|switch|case|break|continue|new|class|extends|import|export|from|async|await|try|catch|finally|throw|typeof|instanceof|in|of|this|null|undefined|true|false)\b/, 'k'],
+      [/\b\d+(?:\.\d+)?\b/, 'n'],
+      [/[A-Za-z_$][\w$]*(?=\()/, 'f']
+    ],
+    css: [
+      [/\/\*[\s\S]*?\*\//, 'c'],
+      [/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/, 's'],
+      [/@[\w-]+/, 'k'],
+      [/#[0-9a-fA-F]{3,8}\b|-?\d*\.?\d+(?:px|em|rem|%|vh|vw|vmin|vmax|s|ms|deg|fr|ch)?\b/, 'n'],
+      [/--?[A-Za-z][\w-]*(?=\s*:)|[a-z-]+(?=\s*:\s)/, 'p']
+    ],
+    html: [
+      [/<!--[\s\S]*?-->/, 'c'],
+      [/"[^"\n]*"|'[^'\n]*'/, 's'],
+      [/<\/?[A-Za-z][\w-]*|<!doctype|\/?>/i, 't'],
+      [/[\w:-]+(?==)/, 'a']
+    ]
+  };
+  var COMBINED = {};
+  Object.keys(RULES).forEach(function (l) {
+    COMBINED[l] = new RegExp(RULES[l].map(function (r) { return '(' + r[0].source + ')'; }).join('|'), l === 'html' ? 'gi' : 'g');
+  });
+  function langOf(name) {
+    var e = (name.split('.').pop() || '').toLowerCase();
+    if (e === 'html' || e === 'htm') return 'html';
+    if (e === 'css') return 'css';
+    if (e === 'js' || e === 'mjs' || e === 'json') return 'js';
+    return '';
+  }
+  function hl(code, lang) {
+    var re = COMBINED[lang];
+    if (!re) return esc(code);
+    re.lastIndex = 0;
+    var out = '', last = 0, m;
+    while ((m = re.exec(code))) {
+      if (m[0] === '') { re.lastIndex++; continue; }
+      var i = 1; while (m[i] === undefined) i++;
+      out += esc(code.slice(last, m.index)) + '<span class="' + RULES[lang][i - 1][1] + '">' + esc(m[0]) + '</span>';
+      last = re.lastIndex;
+    }
+    return out + esc(code.slice(last));
+  }
+
+  // ---------- editor ----------
+  var ta = $('ta'), hlEl = $('hl'), gut = $('gut');
+  function paint() {
+    var v = ta.value;
+    hlEl.innerHTML = hl(v, langOf(S.active)) + '\n';
+    var n = v.split('\n').length, g = '';
+    for (var i = 1; i <= n; i++) g += i + '\n';
+    gut.textContent = g;
+    sync();
+  }
+  function sync() {
+    hlEl.scrollTop = ta.scrollTop; hlEl.scrollLeft = ta.scrollLeft; gut.scrollTop = ta.scrollTop;
+  }
+  var runT;
+  ta.addEventListener('input', function () {
+    S.files[S.active] = ta.value;
+    paint();
+    setStatus('Menyimpan...');
+    clearTimeout(saveT); saveT = setTimeout(save, 400);
+    if ($('auto').checked) { clearTimeout(runT); runT = setTimeout(run, 700); }
+  });
+  ta.addEventListener('scroll', sync);
+  function insert(text, back) {
+    ta.focus();
+    var ok = false;
+    try { ok = document.execCommand('insertText', false, text); } catch (e) {}
+    if (!ok) {
+      var s = ta.selectionStart; ta.setRangeText(text, s, ta.selectionEnd, 'end');
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    if (back) { var p = ta.selectionStart - back; ta.setSelectionRange(p, p); }
+  }
+  ta.addEventListener('keydown', function (e) {
+    if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); insert('  '); return; }
+    if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      var v = ta.value, p = ta.selectionStart;
+      var ls = v.lastIndexOf('\n', p - 1) + 1;
+      var indent = (v.slice(ls, p).match(/^[ \t]*/) || [''])[0];
+      var prev = v.charAt(p - 1);
+      if (prev === '{' || prev === '(' || prev === '[' || (prev === '>' && langOf(S.active) === 'html' && !/<\/|\/>|<(meta|link|br|hr|img|input)\b/i.test(v.slice(ls, p)))) indent += '  ';
+      e.preventDefault(); insert('\n' + indent);
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); run(); }
+  });
+
+  // tombol bantu untuk keyboard layar sentuh
+  var KEYS = [['Tab', '  ', 0], ['{}', '{}', 1], ['()', '()', 1], ['[]', '[]', 1], ['<>', '<>', 1], ['"', '""', 1], ["'", "''", 1], ['`', '``', 1],
+    [';', ';', 0], [':', ':', 0], ['=', '=', 0], ['/', '/', 0], ['.', '.', 0], [',', ',', 0], ['#', '#', 0], ['!', '!', 0], ['$', '$', 0]];
+  var keysEl = $('keys');
+  var undoB = document.createElement('button'); undoB.type = 'button'; undoB.textContent = '↶'; undoB.setAttribute('aria-label', 'Urungkan');
+  keysEl.appendChild(undoB);
+  undoB.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+  undoB.addEventListener('click', function () { ta.focus(); try { document.execCommand('undo'); } catch (e) {} });
+  KEYS.forEach(function (k) {
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = k[0];
+    b.addEventListener('pointerdown', function (e) { e.preventDefault(); });
+    b.addEventListener('click', function () { insert(k[1], k[2]); });
+    keysEl.appendChild(b);
+  });
+
+  // ---------- berkas ----------
+  var filesEl = $('files');
+  function renderFiles() {
+    filesEl.textContent = '';
+    S.order.forEach(function (n) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'file'; b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(n === S.active)); b.textContent = n;
+      b.addEventListener('click', function () { S.active = n; ta.value = S.files[n]; renderFiles(); paint(); save(); ta.scrollTop = 0; });
+      filesEl.appendChild(b);
+    });
+    var add = document.createElement('button'); add.type = 'button'; add.className = 'file add'; add.textContent = '+ berkas';
+    add.addEventListener('click', function () { $('newForm').hidden = false; $('newName').value = ''; $('newErr').hidden = true; $('newName').focus(); });
+    filesEl.appendChild(add);
+    statusEl = document.createElement('span'); statusEl.className = 'status'; filesEl.appendChild(statusEl);
+    if (S.order.length > 1) {
+      var d = document.createElement('button'); d.type = 'button'; d.className = 'file del'; d.textContent = 'Hapus';
+      d.addEventListener('click', function () {
+        if (!d.dataset.armed) { d.dataset.armed = '1'; d.textContent = 'Yakin hapus ' + S.active + '?'; setTimeout(function () { if (d.isConnected) { d.dataset.armed = ''; d.textContent = 'Hapus'; } }, 3000); return; }
+        var n = S.active; S.order = S.order.filter(function (x) { return x !== n; }); delete S.files[n];
+        S.active = S.order[0]; ta.value = S.files[S.active]; renderFiles(); paint(); save(); run();
+      });
+      filesEl.insertBefore(d, statusEl);
+    }
+  }
+  $('newCancel').addEventListener('click', function () { $('newForm').hidden = true; });
+  $('newForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var n = $('newName').value.trim(), err = $('newErr');
+    var msg = !/^[A-Za-z0-9_.-]+\.(html|css|js|json|txt|md)$/i.test(n) ? 'Pakai nama seperti halaman.html, gaya.css atau kode.js.' : (S.files[n] !== undefined ? 'Berkas itu sudah ada.' : '');
+    if (msg) { err.textContent = msg; err.hidden = false; return; }
+    S.files[n] = ''; S.order.push(n); S.active = n; ta.value = '';
+    $('newForm').hidden = true; renderFiles(); paint(); save(); ta.focus();
+  });
+
+  // ---------- jalankan ----------
+  var CAP = '(function(){var P=parent;function f(a){try{if(a===undefined)return"undefined";if(typeof a==="string")return a;if(a instanceof Error)return a.stack||a.message;if(typeof a==="function")return String(a);return JSON.stringify(a,function(k,v){return v===undefined?"undefined":v},2)}catch(e){return String(a)}}' +
+    'function s(t,a){P.postMessage({__ed:1,t:t,m:[].map.call(a,f).join(" ")},"*")}' +
+    '["log","info","warn","error"].forEach(function(t){var o=console[t];console[t]=function(){s(t,arguments);try{o.apply(console,arguments)}catch(e){}}});' +
+    'window.addEventListener("error",function(e){s("error",[e.message+(e.lineno?" (baris "+e.lineno+")":"")])});' +
+    'window.addEventListener("unhandledrejection",function(e){s("error",["Promise ditolak: "+f(e.reason)])});' +
+    'window.addEventListener("message",function(e){if(e.data&&e.data.__ev){try{s("result",[(0,eval)(e.data.code)])}catch(x){s("error",[String(x)])}}});})();';
+  function buildDoc() {
+    var html = S.files['index.html'];
+    if (html === undefined) {
+      var first = S.order.filter(function (n) { return langOf(n) === 'html'; })[0];
+      html = first ? S.files[first] : '<p style="font:14px system-ui;padding:16px">Tambahkan berkas index.html untuk melihat hasil.</p>';
+    }
+    html = html.replace(/<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi, function (m, h) {
+      return /\.css$/i.test(h) && S.files[h] !== undefined ? '<style>\n' + S.files[h].replace(/<\/style/gi, '<\\/style') + '\n</style>' : m;
+    });
+    html = html.replace(/<script\b([^>]*?)\bsrc=["']([^"']+)["']([^>]*)>\s*<\/script>/gi, function (m, a, s, b) {
+      return /\.m?js$/i.test(s) && S.files[s] !== undefined ? '<script' + a + b + '>\n' + S.files[s].replace(/<\/script/gi, '<\\/script') + '\n<\/script>' : m;
+    });
+    var inj = '<script>' + CAP + '<\/script>';
+    return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, function (m) { return m + inj; }) : inj + html;
+  }
+  var frame = $('frame'), logEl = $('log'), errs = 0;
+  function addLog(t, m) {
+    var d = document.createElement('div'); d.className = 'ln ' + t; d.textContent = m;
+    var stick = logEl.scrollTop + logEl.clientHeight >= logEl.scrollHeight - 30;
+    logEl.appendChild(d); if (stick) logEl.scrollTop = logEl.scrollHeight;
+    if (t === 'error') { errs++; var b = $('errBadge'); b.textContent = errs; b.hidden = false; }
+  }
+  function clearLog() { logEl.textContent = ''; errs = 0; $('errBadge').hidden = true; }
+  function run() {
+    clearTimeout(runT); clearLog();
+    addLog('sys', 'Dijalankan ' + new Date().toLocaleTimeString('id-ID'));
+    frame.srcdoc = buildDoc();
+  }
+  window.addEventListener('message', function (e) {
+    if (e.source !== frame.contentWindow || !e.data || !e.data.__ed) return;
+    addLog(e.data.t, e.data.m);
+  });
+  $('run').addEventListener('click', function () { run(); if (matchMedia('(max-width: 879px)').matches) setView('out'); });
+  $('clearLog').addEventListener('click', clearLog);
+  $('evalForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var c = $('evalIn').value; if (!c.trim()) return;
+    addLog('in', c); $('evalIn').value = '';
+    try { frame.contentWindow.postMessage({ __ev: 1, code: c }, '*'); } catch (x) { addLog('error', 'Halaman hasil belum siap.'); }
+  });
+  var resetArmed = false;
+  $('reset').addEventListener('click', function () {
+    var b = this;
+    if (!resetArmed) { resetArmed = true; b.textContent = 'Yakin?'; b.classList.add('danger'); setTimeout(function () { resetArmed = false; b.textContent = 'Reset'; b.classList.remove('danger'); }, 3000); return; }
+    resetArmed = false; b.textContent = 'Reset'; b.classList.remove('danger');
+    S = starter(); ta.value = S.files[S.active]; renderFiles(); paint(); save(); run();
+  });
+
+  // ---------- tampilan HP ----------
+  function setView(v) {
+    $('main').dataset.view = v;
+    [].forEach.call($('views').children, function (b) { b.setAttribute('aria-selected', String(b.dataset.view === v)); });
+  }
+  $('views').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) setView(b.dataset.view); });
+
+  // ---------- mulai ----------
+  ta.value = S.files[S.active];
+  renderFiles(); paint(); run();
+})();
+</script>
+</body>
+</html>
